@@ -7,6 +7,114 @@ import (
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 )
 
+func TestAuthDisabled(t *testing.T) {
+	srv := NewServer(":18832")
+	if err := srv.Start(); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	defer srv.Stop()
+	time.Sleep(50 * time.Millisecond)
+
+	opts := mqtt.NewClientOptions()
+	opts.AddBroker("tcp://127.0.0.1:18832")
+	opts.SetClientID("auth-disabled")
+	opts.SetCleanSession(true)
+
+	client := mqtt.NewClient(opts)
+	tok := client.Connect()
+	if !tok.WaitTimeout(3 * time.Second) {
+		t.Fatal("connect timeout")
+	}
+	if tok.Error() != nil {
+		t.Fatalf("connect should succeed with auth disabled: %v", tok.Error())
+	}
+	client.Disconnect(250)
+}
+
+func TestAuthEnabled(t *testing.T) {
+	auth := NewMapAuthenticator()
+	auth.AddUser("user1", "pass1")
+
+	srv := NewServer(":18833")
+	srv.SetAuthenticator(auth)
+	if err := srv.Start(); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	defer srv.Stop()
+	time.Sleep(50 * time.Millisecond)
+
+	t.Run("correct_credentials", func(t *testing.T) {
+		opts := mqtt.NewClientOptions()
+		opts.AddBroker("tcp://127.0.0.1:18833")
+		opts.SetClientID("auth-good")
+		opts.SetCleanSession(true)
+		opts.SetUsername("user1")
+		opts.SetPassword("pass1")
+
+		client := mqtt.NewClient(opts)
+		tok := client.Connect()
+		if !tok.WaitTimeout(3 * time.Second) {
+			t.Fatal("connect timeout")
+		}
+		if tok.Error() != nil {
+			t.Fatalf("connect should succeed with valid credentials: %v", tok.Error())
+		}
+		client.Disconnect(250)
+	})
+
+	t.Run("wrong_password", func(t *testing.T) {
+		opts := mqtt.NewClientOptions()
+		opts.AddBroker("tcp://127.0.0.1:18833")
+		opts.SetClientID("auth-wrong")
+		opts.SetCleanSession(true)
+		opts.SetUsername("user1")
+		opts.SetPassword("wrongpass")
+
+		client := mqtt.NewClient(opts)
+		tok := client.Connect()
+		if !tok.WaitTimeout(3 * time.Second) {
+			t.Fatal("connect timeout")
+		}
+		if tok.Error() == nil {
+			t.Fatal("connect should fail with wrong password")
+		}
+	})
+
+	t.Run("unknown_user", func(t *testing.T) {
+		opts := mqtt.NewClientOptions()
+		opts.AddBroker("tcp://127.0.0.1:18833")
+		opts.SetClientID("auth-unknown")
+		opts.SetCleanSession(true)
+		opts.SetUsername("nobody")
+		opts.SetPassword("pass")
+
+		client := mqtt.NewClient(opts)
+		tok := client.Connect()
+		if !tok.WaitTimeout(3 * time.Second) {
+			t.Fatal("connect timeout")
+		}
+		if tok.Error() == nil {
+			t.Fatal("connect should fail for unknown user")
+		}
+	})
+
+	t.Run("no_credentials", func(t *testing.T) {
+		opts := mqtt.NewClientOptions()
+		opts.AddBroker("tcp://127.0.0.1:18833")
+		opts.SetClientID("auth-nocred")
+		opts.SetCleanSession(true)
+
+		client := mqtt.NewClient(opts)
+		tok := client.Connect()
+		if !tok.WaitTimeout(3 * time.Second) {
+			t.Fatal("connect timeout")
+		}
+		if tok.Error() == nil {
+			t.Fatal("connect should fail without credentials when auth is enabled")
+		}
+	})
+}
+
 func TestIntegrationPubSub(t *testing.T) {
 	srv := NewServer(":18831")
 	if err := srv.Start(); err != nil {

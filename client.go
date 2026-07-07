@@ -22,7 +22,7 @@ func nextMessageID() uint16 {
 	return uint16(atomic.AddUint32(&msgIDCounter, 1) & 0xFFFF)
 }
 
-func handleClient(conn net.Conn, tm *TopicManager) {
+func handleClient(conn net.Conn, tm *TopicManager, auth Authenticator) {
 	defer conn.Close()
 
 	cp, err := packets.ReadPacket(conn)
@@ -43,6 +43,14 @@ func handleClient(conn net.Conn, tm *TopicManager) {
 	}
 
 	log.Printf("client %s connected (clean=%v, keepalive=%d)", clientID, connectPacket.CleanSession, connectPacket.Keepalive)
+
+	if !auth.Authenticate(connectPacket.Username, string(connectPacket.Password)) {
+		log.Printf("client %s authentication failed", clientID)
+		connack := packets.NewControlPacket(packets.Connack).(*packets.ConnackPacket)
+		connack.ReturnCode = packets.ErrRefusedBadUsernameOrPassword
+		connack.Write(conn)
+		return
+	}
 
 	clientMu.Lock()
 	if old, ok := clients[clientID]; ok {

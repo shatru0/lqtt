@@ -8,6 +8,7 @@ import (
 type Server struct {
 	addr   string
 	tm     *TopicManager
+	auth   Authenticator
 	ln     net.Listener
 	closed chan struct{}
 }
@@ -16,8 +17,13 @@ func NewServer(addr string) *Server {
 	return &Server{
 		addr:   addr,
 		tm:     NewTopicManager(),
+		auth:   AllowAllAuthenticator{},
 		closed: make(chan struct{}),
 	}
+}
+
+func (s *Server) SetAuthenticator(auth Authenticator) {
+	s.auth = auth
 }
 
 func (s *Server) Start() error {
@@ -44,7 +50,7 @@ func (s *Server) acceptLoop() {
 			log.Printf("accept: %v", err)
 			continue
 		}
-		go handleClient(conn, s.tm)
+		go handleClient(conn, s.tm, s.auth)
 	}
 }
 
