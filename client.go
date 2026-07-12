@@ -22,7 +22,7 @@ func nextMessageID() uint16 {
 	return uint16(atomic.AddUint32(&msgIDCounter, 1) & 0xFFFF)
 }
 
-func handleClient(conn net.Conn, tm *TopicManager, auth Authenticator) {
+func handleClient(conn net.Conn, tm *TopicManager, auth Authenticator, acl ACL) {
 	defer conn.Close()
 
 	cp, err := packets.ReadPacket(conn)
@@ -42,9 +42,11 @@ func handleClient(conn net.Conn, tm *TopicManager, auth Authenticator) {
 		clientID = fmt.Sprintf("auto-%d", nextMessageID())
 	}
 
+	username := connectPacket.Username
+
 	log.Printf("client %s connected (clean=%v, keepalive=%d)", clientID, connectPacket.CleanSession, connectPacket.Keepalive)
 
-	if !auth.Authenticate(connectPacket.Username, string(connectPacket.Password)) {
+	if !auth.Authenticate(username, string(connectPacket.Password)) {
 		log.Printf("client %s authentication failed", clientID)
 		connack := packets.NewControlPacket(packets.Connack).(*packets.ConnackPacket)
 		connack.ReturnCode = packets.ErrRefusedBadUsernameOrPassword
@@ -82,11 +84,15 @@ func handleClient(conn net.Conn, tm *TopicManager, auth Authenticator) {
 
 		switch p := cp.(type) {
 		case *packets.PublishPacket:
-			handlePublish(conn, clientID, p, tm)
+			handlePublish(conn, clientID, username, p, tm, acl)
 		case *packets.SubscribePacket:
-			handleSubscribe(conn, clientID, p, tm)
+			handleSubscribe(conn, clientID, username, p, tm, acl)
 		case *packets.UnsubscribePacket:
 			handleUnsubscribe(conn, clientID, p, tm)
+		case *packets.PubackPacket: // TODO: PubAck needs to be handled to acknowledge the subscriber ack to avoid resend, and also handle resend on no Ack
+		case *packets.PubrecPacket:
+		case *packets.PubrelPacket:
+		case *packets.PubcompPacket:
 		case *packets.PingreqPacket:
 			resp := packets.NewControlPacket(packets.Pingresp)
 			resp.Write(conn)
@@ -99,7 +105,12 @@ func handleClient(conn net.Conn, tm *TopicManager, auth Authenticator) {
 	}
 }
 
-func handlePublish(conn net.Conn, clientID string, pub *packets.PublishPacket, tm *TopicManager) {
+func handlePublish(conn net.Conn, clientID string, username string, pub *packets.PublishPacket, tm *TopicManager, acl ACL) {
+	if !acl.CanPublish(username, pub.TopicName) {
+		log.Printf("client %s publish to %s denied by ACL", clientID, pub.TopicName)
+		return
+	}
+
 	switch pub.FixedHeader.Qos {
 	case 0:
 
@@ -157,9 +168,14 @@ func handlePublish(conn net.Conn, clientID string, pub *packets.PublishPacket, t
 	}
 }
 
-func handleSubscribe(conn net.Conn, clientID string, sub *packets.SubscribePacket, tm *TopicManager) {
+func handleSubscribe(conn net.Conn, clientID string, username string, sub *packets.SubscribePacket, tm *TopicManager, acl ACL) {
 	returnCodes := make([]byte, len(sub.Topics))
 	for i, topic := range sub.Topics {
+		if !acl.CanSubscribe(username, topic) {
+			log.Printf("client %s subscribe to %s denied by ACL", clientID, topic)
+			returnCodes[i] = 0x80
+			continue
+		}
 		qos := sub.Qoss[i]
 		if qos > 2 {
 			returnCodes[i] = 0x80

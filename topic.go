@@ -106,6 +106,28 @@ func (n *trieNode) removeAll(clientID string) {
 	}
 }
 
+func matchTopics(topicParts, filterParts []string) bool {
+	tlen, flen := len(topicParts), len(filterParts)
+	for i := 0; i < tlen || i < flen; i++ {
+		if i >= flen {
+			return false
+		}
+		if filterParts[i] == "#" {
+			return true
+		}
+		if i >= tlen {
+			return false
+		}
+		if filterParts[i] == "+" {
+			continue
+		}
+		if filterParts[i] != topicParts[i] {
+			return false
+		}
+	}
+	return tlen == flen
+}
+
 func removeClient(subs []Subscription, clientID string) []Subscription {
 	n := 0
 	for _, s := range subs {
