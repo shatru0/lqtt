@@ -1,0 +1,5 @@
+%{
+  "mqttc": {:hex, :mqttc, "0.2.1", "91cf265d751ddd7150878ec2c6f4a13b8c14984bc7de8eedf0e40c90a7f43698", [:mix], [{:nimble_options, "~> 1.1", [hex: :nimble_options, repo: "hexpm", optional: false]}, {:telemetry, "~> 1.0", [hex: :telemetry, repo: "hexpm", optional: false]}], "hexpm", "7e2b3e97234c0d1c0cc0b84808b3bfa2bc52c4500b1d96f02078a5ae3aa314e9"},
+  "nimble_options": {:hex, :nimble_options, "1.1.1", "e3a492d54d85fc3fd7c5baf411d9d2852922f66e69476317787a7b2bb000a61b", [:mix], [], "hexpm", "821b2470ca9442c4b6984882fe9bb0389371b8ddec4d45a9504f00a66f650b44"},
+  "telemetry": {:hex, :telemetry, "1.4.2", "a0cb522801dffb1c49fe6e30561badffc7b6d0e180db1300df759faa22062855", [:rebar3], [], "hexpm", "928f6495066506077862c0d1646609eed891a4326bee3126ba54b60af61febb1"},
+}

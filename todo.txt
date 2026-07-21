@@ -1,2 +1,3 @@
-(A) 2026-07-06 Clustering with Valkey +node @scaling due:2026-07-07
-(B) event stream or grpc logic for node to node communication +node @communication due:2026-07-09
+(A) 2026-07-12 clustering with Valkey + node-to-node communication
+(B) store subscriber sockets for message forwarding in server state  ✓
+(C) QoS 1/2 pending message store and retry
