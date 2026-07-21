@@ -126,6 +126,7 @@ defmodule Lqtt.ClientHandler do
       end
 
       subs = GenServer.call(server_pid, {:match, pub.topic})
+      Logger.info("publish match: topic=#{pub.topic} subs=#{inspect(subs)}")
 
       for sub <- subs do
         {_node, sub_client_id} = sub.dest
@@ -141,6 +142,7 @@ defmodule Lqtt.ClientHandler do
             identifier: if(qos > 0, do: next_message_id(), else: nil)
           }
 
+          Logger.info("forwarding to client_id=#{sub_client_id} on node=#{_node}")
           GenServer.call(server_pid, {:forward, sub_client_id, msg})
         end
       end

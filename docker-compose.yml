@@ -35,6 +35,26 @@ services:
     networks:
       - lqtt-net
 
+  node3:
+    build: .
+    hostname: node3
+    container_name: lqtt-node3
+    ports:
+      - "18835:1883"
+    environment:
+      - PORT=1883
+      - RELEASE_COOKIE=lqtt
+      - PEER_NODES=lqtt1@node1
+    depends_on:
+      - node1
+    command: >
+      sh -c "
+        sleep 5 &&
+        elixir --sname lqtt3 --cookie lqtt -S mix run --no-halt
+      "
+    networks:
+      - lqtt-net
+
 networks:
   lqtt-net:
     driver: bridge

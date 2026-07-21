@@ -4,10 +4,6 @@ defmodule Lqtt.Application do
 
   @impl true
   def start(_type, _args) do
-    connect_peers()
-    Lqtt.Route.Mnesia.setup()
-    join_peers()
-
     port = String.to_integer(System.get_env("PORT", "1883"))
 
     children = [
@@ -16,7 +12,13 @@ defmodule Lqtt.Application do
     ]
 
     opts = [strategy: :one_for_one, name: Lqtt.Supervisor]
-    Supervisor.start_link(children, opts)
+    {:ok, pid} = Supervisor.start_link(children, opts)
+
+    connect_peers()
+    Lqtt.Route.Mnesia.setup()
+    join_peers()
+
+    {:ok, pid}
   end
 
   defp connect_peers do
@@ -42,6 +44,17 @@ defmodule Lqtt.Application do
         for node <- nodes do
           Lqtt.Route.Mnesia.join_cluster(node)
         end
+        connect_all_nodes()
+    end
+  end
+
+  defp connect_all_nodes do
+    known = :mnesia.system_info(:running_db_nodes)
+    for node <- known, node != node() do
+      unless node in Node.list() do
+        Logger.info("Connecting to cluster node: #{node}")
+        Node.connect(node)
+      end
     end
   end
 

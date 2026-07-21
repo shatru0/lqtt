@@ -31,6 +31,7 @@ defmodule Lqtt.Cluster do
   def handle_info({:nodeup, node, _}, state) do
     Logger.info("Cluster node up: #{node}")
     Lqtt.Route.Mnesia.join_cluster(node)
+    ensure_full_mesh(node)
     {:noreply, state}
   end
 
@@ -43,6 +44,7 @@ defmodule Lqtt.Cluster do
   def handle_info({:nodeup, node}, state) do
     Logger.info("Cluster node up: #{node}")
     Lqtt.Route.Mnesia.join_cluster(node)
+    ensure_full_mesh(node)
     {:noreply, state}
   end
 
@@ -50,5 +52,16 @@ defmodule Lqtt.Cluster do
     Logger.info("Cluster node down: #{node}")
     Lqtt.Route.Mnesia.delete_node_routes(node)
     {:noreply, state}
+  end
+
+  defp ensure_full_mesh(joined_node) do
+    known = :mnesia.system_info(:running_db_nodes)
+    my_node = node()
+    node_list = Node.list()
+    Logger.info("ensure_mesh joined=#{joined_node} known=#{inspect(known)} my=#{my_node} node_list=#{inspect(node_list)}")
+    for n <- known, n != my_node, n not in node_list do
+      Logger.info("Connecting to cluster node: #{n}")
+      Node.connect(n)
+    end
   end
 end

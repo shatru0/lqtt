@@ -102,7 +102,7 @@ defmodule Lqtt.Route.Mnesia do
     entry =
       if Lqtt.TopicFilter.wildcard?(topic) do
         ws = Lqtt.TopicFilter.parse_filter(topic)
-        {@filters_table, {ws, dest}, topic, dest, qos}
+        {@filters_table, {ws, {dest}}, topic, dest, qos}
       else
         {@route_table, topic, dest, qos}
       end
@@ -115,7 +115,7 @@ defmodule Lqtt.Route.Mnesia do
     fn ->
       if Lqtt.TopicFilter.wildcard?(topic) do
         ws = Lqtt.TopicFilter.parse_filter(topic)
-        :mnesia.delete({@filters_table, {ws, dest}})
+        :mnesia.delete({@filters_table, {ws, {dest}}})
       else
         :mnesia.match_object({@route_table, topic, dest, :_})
         |> Enum.each(&:mnesia.delete_object(&1))
@@ -171,9 +171,14 @@ defmodule Lqtt.Route.Mnesia do
 
       filters =
         if tid == :undefined do
+          Logger.warning("match_routes: filters table not found")
           []
         else
-          traverse_filters(topic_ws, :ets.first(tid), tid, [])
+          first = :ets.first(tid)
+          Logger.info("match_routes: topic=#{topic} tid=#{inspect(tid)} first=#{inspect(first)} table_size=#{:ets.info(tid, :size)}")
+          result = traverse_filters(topic_ws, first, tid, [])
+          Logger.info("match_routes: result=#{inspect(result)}")
+          result
         end
 
       normalise(exact ++ filters)
@@ -215,14 +220,22 @@ defmodule Lqtt.Route.Mnesia do
     end)
   end
 
-  # ── ordered-set traversal (EMQX-style) ──
+  # ── EMQX-style trie-search traversal ──
+  #
+  # Walks the ordered_set using the trie-search skip-ahead algorithm.
+  # Keys are {words, {dest}} where words is a list of atoms (:+ / :h) and
+  # binaries.  The compare/2 function returns seek instructions that let us
+  # jump over entries that can't possibly match the topic.
 
   defp traverse_filters(_topic_ws, :"$end_of_table", _tid, acc), do: acc
 
   defp traverse_filters(topic_ws, key, tid, acc) do
-    {filter_ws, dest} = key
+    {filter_ws, {dest}} = key
 
-    case Lqtt.TopicFilter.compare(filter_ws, topic_ws) do
+    result = Lqtt.TopicFilter.compare(filter_ws, topic_ws)
+    Logger.info("traverse: filter=#{inspect(filter_ws)} topic=#{inspect(topic_ws)} result=#{inspect(result)}")
+
+    case result do
       :match ->
         raw = :ets.lookup(tid, key)
         topic = Lqtt.TopicFilter.join_words(filter_ws)
@@ -232,12 +245,18 @@ defmodule Lqtt.Route.Mnesia do
           {@filters_table, key, topic, dest, qos} | acc
         ])
 
-      {:jump, jump_words} ->
-        next = :ets.next(tid, {jump_words, {}})
-        traverse_filters(topic_ws, next, tid, acc)
+      :match_prefix ->
+        traverse_filters(topic_ws, :ets.next(tid, key), tid, acc)
 
-      :done ->
+      :lower ->
         acc
+
+      {:jump, jump_words} ->
+        seek_key = {jump_words, {}}
+        Logger.info("traverse: jumping to #{inspect(seek_key)}")
+        next_key = :ets.next(tid, seek_key)
+        Logger.info("traverse: next after jump=#{inspect(next_key)}")
+        traverse_filters(topic_ws, next_key, tid, acc)
     end
   end
 end

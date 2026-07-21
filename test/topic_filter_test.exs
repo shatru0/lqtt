@@ -11,11 +11,11 @@ defmodule Lqtt.TopicFilterTest do
     end
 
     test "multi-level wildcard" do
-      assert Lqtt.TopicFilter.parse_filter("a/#") == ["a", :h]
+      assert Lqtt.TopicFilter.parse_filter("a/#") == ["a", :"#"]
     end
 
     test "bare hash" do
-      assert Lqtt.TopicFilter.parse_filter("#") == [:h]
+      assert Lqtt.TopicFilter.parse_filter("#") == [:"#"]
     end
 
     test "bare plus" do
@@ -23,8 +23,8 @@ defmodule Lqtt.TopicFilterTest do
     end
 
     test "mixed wildcards" do
-      assert Lqtt.TopicFilter.parse_filter("+/#") == [:+, :h]
-      assert Lqtt.TopicFilter.parse_filter("sensor/+/temp/#") == ["sensor", :+, "temp", :h]
+      assert Lqtt.TopicFilter.parse_filter("+/#") == [:+, :"#"]
+      assert Lqtt.TopicFilter.parse_filter("sensor/+/temp/#") == ["sensor", :+, "temp", :"#"]
     end
   end
 
@@ -35,8 +35,8 @@ defmodule Lqtt.TopicFilterTest do
 
     test "with wildcards" do
       assert Lqtt.TopicFilter.join_words(["a", :+, "c"]) == "a/+/c"
-      assert Lqtt.TopicFilter.join_words(["a", :h]) == "a/#"
-      assert Lqtt.TopicFilter.join_words([:+, :h]) == "+/#"
+      assert Lqtt.TopicFilter.join_words(["a", :"#"]) == "a/#"
+      assert Lqtt.TopicFilter.join_words([:+, :"#"]) == "+/#"
     end
   end
 
@@ -116,23 +116,27 @@ defmodule Lqtt.TopicFilterTest do
     end
 
     test "filter exhausted before topic (partial match)" do
-      assert Lqtt.TopicFilter.compare([:h], ["a", "b"]) == :match
+      assert Lqtt.TopicFilter.compare([:"#"], ["a", "b"]) == :match
     end
 
     test "hash wildcard" do
-      assert Lqtt.TopicFilter.compare(["a", :h], ["a", "b", "c"]) == :match
+      assert Lqtt.TopicFilter.compare(["a", :"#"], ["a", "b", "c"]) == :match
     end
 
     test "plus matches one level" do
       assert Lqtt.TopicFilter.compare(["a", :+, "c"], ["a", "b", "c"]) == :match
     end
 
+    test "filter is prefix of topic (match_prefix)" do
+      assert Lqtt.TopicFilter.compare(["a", :+, "c"], ["a", "b", "c", "d"]) == :match_prefix
+    end
+
     test "topic exhausted before filter" do
-      assert Lqtt.TopicFilter.compare(["a", "b"], ["a"]) == :done
+      assert Lqtt.TopicFilter.compare(["a", "b"], ["a"]) == :lower
     end
 
     test "filter word > topic word without backtrack" do
-      assert Lqtt.TopicFilter.compare(["b", "c"], ["a", "d"]) == :done
+      assert Lqtt.TopicFilter.compare(["b", "c"], ["a", "d"]) == :lower
     end
 
     test "filter word > topic word with backtrack" do
@@ -146,7 +150,7 @@ defmodule Lqtt.TopicFilterTest do
     end
 
     test "no backtrack point" do
-      assert Lqtt.TopicFilter.compare(["b", "c"], ["a", "z"]) == :done
+      assert Lqtt.TopicFilter.compare(["b", "c"], ["a", "z"]) == :lower
     end
   end
 end

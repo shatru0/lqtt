@@ -7,11 +7,11 @@ defmodule Lqtt.TopicFilter do
   routing table for clustered operation.
   """
 
-  @typedoc "A parsed filter: literal strings, `:+` for single-level, or `:h` for multi-level."
-  @type parsed_filter :: [String.t() | :+ | :h]
+  @typedoc "A parsed filter: literal strings, `:+` for single-level, or `:\"#\"` for multi-level."
+  @type parsed_filter :: [String.t() | :+ | :"#"]
 
   @typedoc "Return value of `compare/2`."
-  @type compare_result :: :match | :done | {:jump, [String.t() | :+ | :h]}
+  @type compare_result :: :match | :match_prefix | :lower | {:jump, [String.t() | :+ | :h]}
 
   @doc """
   Parse a topic filter string into a word list.
@@ -22,7 +22,7 @@ defmodule Lqtt.TopicFilter do
     String.split(topic, "/")
     |> Enum.map(fn
       "+" -> :+
-      "#" -> :h
+      "#" -> :"#"
       w -> w
     end)
   end
@@ -37,7 +37,7 @@ defmodule Lqtt.TopicFilter do
     ws
     |> Enum.map(fn
       :+ -> "+"
-      :h -> "#"
+      :"#" -> "#"
       w -> w
     end)
     |> Enum.join("/")
@@ -69,10 +69,10 @@ defmodule Lqtt.TopicFilter do
   @doc """
   EMQX-style trie comparison between a parsed filter and a topic word list.
 
-  Returns `:match` if the topic matches the filter, `:done` if the filter
-  can never match (lexicographically past the topic), or
-  `{:jump, jump_words}` indicating the next filter key to seek to in an
-  ordered_set traversal (skipping over filters that can't match).
+  Returns `:match` if the topic matches the filter, `:match_prefix` if the
+  filter is a prefix of the topic (continue scanning), `:lower` if the filter
+  is lexicographically past the topic (stop), or `{:jump, jump_words}`
+  indicating the next filter key to seek to in an ordered_set traversal.
   """
   @spec compare(parsed_filter(), [String.t()]) :: compare_result()
   def compare(filter_ws, topic_ws) do
@@ -81,11 +81,11 @@ defmodule Lqtt.TopicFilter do
 
   # ── trie comparison (EMQX-style) ──
 
-  defp do_compare([:h | _], _, _orig, _pos, _bt), do: :match
+  defp do_compare([:"#" | _], _, _orig, _pos, _bt), do: :match
 
   defp do_compare([], [], _orig, _pos, _bt), do: :match
-  defp do_compare([], [_ | _], _orig, _pos, _bt), do: :done
-  defp do_compare([_ | _], [], _orig, _pos, _bt), do: :done
+  defp do_compare([], [_ | _], _orig, _pos, _bt), do: :match_prefix
+  defp do_compare([_ | _], [], _orig, _pos, _bt), do: :lower
 
   defp do_compare([:+ | ft], [t | tt], orig, pos, _bt) do
     do_compare(ft, tt, orig, pos + 1, {pos, t})
@@ -103,5 +103,5 @@ defmodule Lqtt.TopicFilter do
     {:jump, Enum.take(orig, pos) ++ [t]}
   end
 
-  defp do_compare([_f | _ft], [_t | _tt], _orig, _pos, nil), do: :done
+  defp do_compare([_f | _ft], [_t | _tt], _orig, _pos, nil), do: :lower
 end

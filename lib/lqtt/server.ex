@@ -118,6 +118,7 @@ defmodule Lqtt.Server do
 
   @impl true
   def handle_cast({:forward_local, client_id, packet}, state) do
+    Logger.info("forward_local: client_id=#{client_id} clients=#{inspect(Map.keys(state.clients))}")
     case Map.fetch(state.clients, client_id) do
       {:ok, sock_pid} ->
         send(sock_pid, {:send, packet})
@@ -129,7 +130,9 @@ defmodule Lqtt.Server do
   end
 
   defp forward_remote(client_id, packet) do
-    for node <- Node.list() do
+    nodes = Node.list()
+    Logger.info("forward_remote: client_id=#{client_id} nodes=#{inspect(nodes)}")
+    for node <- nodes do
       :rpc.cast(node, __MODULE__, :forward_local, [client_id, packet])
     end
   end

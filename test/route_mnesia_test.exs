@@ -116,4 +116,13 @@ defmodule Lqtt.Route.MnesiaTest do
     {:atomic, routes} = Lqtt.Route.Mnesia.list_routes()
     assert length(routes) == 2
   end
+
+  test "match skips past lexicographically-earlier filters to find match" do
+    Lqtt.Route.Mnesia.subscribe("+/kitchen/temp", {:node3, "sub3"}, 0)
+    Lqtt.Route.Mnesia.subscribe("sensor/#", {:node2, "sub2"}, 1)
+    {:atomic, routes} = Lqtt.Route.Mnesia.match_routes("sensor/bedroom/humidity")
+    assert length(routes) == 1
+    assert hd(routes).topic == "sensor/#"
+    assert hd(routes).dest == {:node2, "sub2"}
+  end
 end
