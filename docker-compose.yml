@@ -1,0 +1,40 @@
+services:
+  node1:
+    build: .
+    hostname: node1
+    container_name: lqtt-node1
+    ports:
+      - "18833:1883"
+    environment:
+      - PORT=1883
+      - RELEASE_COOKIE=lqtt
+    command: >
+      sh -c "
+        elixir --sname lqtt1 --cookie lqtt -S mix run --no-halt
+      "
+    networks:
+      - lqtt-net
+
+  node2:
+    build: .
+    hostname: node2
+    container_name: lqtt-node2
+    ports:
+      - "18834:1883"
+    environment:
+      - PORT=1883
+      - RELEASE_COOKIE=lqtt
+      - PEER_NODES=lqtt1@node1
+    depends_on:
+      - node1
+    command: >
+      sh -c "
+        sleep 3 &&
+        elixir --sname lqtt2 --cookie lqtt -S mix run --no-halt
+      "
+    networks:
+      - lqtt-net
+
+networks:
+  lqtt-net:
+    driver: bridge
